@@ -46,7 +46,7 @@ async function init() {
             let hasDuplicated = false;
 
             const modifiedHistory = curr?.history.map((hist,indx,histArr) => {
-                if( indx <= (histArr.length - 1) 
+                if( histArr[indx + 1] 
                     && hist.text === histArr[indx + 1]?.text 
                     && hist.score === histArr[indx + 1]?.score 
                     && hist.version === histArr[indx + 1]?.version 
