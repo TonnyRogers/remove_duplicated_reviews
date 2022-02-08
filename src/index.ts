@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const [,, dbName] = process.argv;
+const [_,__, dbName] = process.argv;
 
 const REQUIRED_VARS = [
     'APPLE_DB_URI',
@@ -39,25 +39,28 @@ async function init() {
                     $exists: true,
                 },
                 $nor: [{ history: { $size: 0 } },{ history: { $size: 1 } },{ history: { $size: 1 } }],
-                // id: 'gp:AOqpTOFhnMxA9WvZCPIc2d_EB2WgcBohDlXsR4-NMu-hVkSQo-4QyoxlhXgqt6l8W8LcX-vNMHnJRKvarw2Ugg',
             })
-            .limit(20)
             .exec();
 
         const reducedReviws = findReview.reduce((prev: Document<unknown, any, ReviewInterface>[],curr) => {
+            let hasDuplicated = false;
+
             const modifiedHistory = curr?.history.map((hist,indx,histArr) => {
-                if( histArr[indx + 1] 
+                if( indx <= (histArr.length - 1) 
                     && hist.text === histArr[indx + 1]?.text 
                     && hist.score === histArr[indx + 1]?.score 
                     && hist.version === histArr[indx + 1]?.version 
                 ) {
                     delete histArr[indx + 1];
+                    hasDuplicated = true;
                 }
                 return hist;
             });
             
-            curr.history = modifiedHistory;
-            prev.push(curr);
+            if(hasDuplicated) {
+                curr.history = modifiedHistory;
+                prev.push(curr);
+            }
 
             return prev;
         },[]);
