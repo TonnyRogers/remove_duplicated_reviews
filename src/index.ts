@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const [_,__, dbName] = process.argv;
+const [_,__, dbName, ignoreCaptureDuplicated] = process.argv;
 
 const REQUIRED_VARS = [
     'APPLE_DB_URI',
@@ -43,9 +43,14 @@ async function init() {
             .exec();
 
         const reducedReviws = findReview.reduce((prev: Document<unknown, any, ReviewInterface>[],curr) => {
-            let hasDuplicated = false;
+            let hasDuplicated = ignoreCaptureDuplicated === 'true' ? true : false;
+            let lastReviewDate = new Date();
 
             const modifiedHistory = curr?.history.map((hist,indx,histArr) => {
+                if(hist.text) {
+                    lastReviewDate = hist.date;
+                }
+
                 if( histArr[indx + 1] 
                     && hist.text === histArr[indx + 1]?.text 
                     && hist.score === histArr[indx + 1]?.score 
@@ -59,6 +64,7 @@ async function init() {
             
             if(hasDuplicated) {
                 curr.history = modifiedHistory;
+                curr.date = moment(lastReviewDate).toDate();
                 prev.push(curr);
             }
 
