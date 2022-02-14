@@ -28,52 +28,70 @@ import Review,{ Review as ReviewInterface } from './schemas/review';
 async function init() {
     const conn = await mongoose.createConnection(dbName === 'google' ? dbConnection.google : dbConnection.apple )
         .asPromise();
-    try {
-        const findReview = await conn.model<ReviewInterface>('Review',Review)
-            .find({
-                date: { 
-                    $gt: moment('2022-01-24').startOf('day').toDate(), 
-                    $lt: moment('2022-02-04').endOf('day').toDate()
-                },
-                history: { 
-                    $exists: true,
-                },
-                $nor: [{ history: { $size: 0 } },{ history: { $size: 1 } },{ history: { $size: 1 } }],
-            })
+    try {        
+        // 🚨 Parte amaldiçoada pois não manjei como fazer com o aggregate 🚫
+
+        const findQuery = {
+            date: { 
+                $gt: moment('2022-01-24').startOf('day').toDate(), 
+                $lt: moment('2022-02-04').endOf('day').toDate()
+            },
+            history: { 
+                $exists: true,
+            },
+            $nor: [{ history: { $size: 0 } },{ history: { $size: 1 } },{ history: { $size: 1 } }],
+        };
+
+        const appIds = await conn.model<ReviewInterface>('Review',Review)
+            .distinct('appId',findQuery)
             .exec();
 
-        const reducedReviws = findReview.reduce((prev: Document<unknown, any, ReviewInterface>[],curr) => {
-            let hasDuplicated = ignoreCaptureDuplicated === 'true' ? true : false;
-            let lastReviewDate = new Date();
+            console.log('Apps:',appIds);        
 
-            const modifiedHistory = curr?.history.map((hist,indx,histArr) => {
-                if(hist.text) {
-                    lastReviewDate = hist.date;
-                }
-
-                if( histArr[indx + 1] 
-                    && hist.text === histArr[indx + 1]?.text 
-                    && hist.score === histArr[indx + 1]?.score 
-                    && hist.version === histArr[indx + 1]?.version 
-                ) {
-                    delete histArr[indx + 1];
-                    hasDuplicated = true;
-                }
-                return hist;
-            });
+        for (const appId of appIds) {
+            const findReview = await conn.model<ReviewInterface>('Review',Review)
+                .find({
+                    ...findQuery,
+                    appId,
+                })
+                .exec();
             
-            if(hasDuplicated) {
-                curr.history = modifiedHistory;
-                curr.date = moment(lastReviewDate).toDate();
-                prev.push(curr);
+    
+            const reducedReviws = findReview.reduce((prev: Document<unknown, any, ReviewInterface>[],curr) => {
+                let hasDuplicated = ignoreCaptureDuplicated === 'true' ? true : false;
+                let lastReviewDate = new Date();
+    
+                const modifiedHistory = curr?.history.map((hist,indx,histArr) => {
+                    if(hist.text) {
+                        lastReviewDate = hist.date;
+                    }
+    
+                    if( histArr[indx + 1] 
+                        && hist.text === histArr[indx + 1]?.text 
+                        && hist.score === histArr[indx + 1]?.score 
+                        && hist.version === histArr[indx + 1]?.version 
+                    ) {
+                        delete histArr[indx + 1];
+                        hasDuplicated = true;
+                    }
+                    return hist;
+                });
+                
+                if(hasDuplicated) {
+                    curr.history = modifiedHistory;
+                    curr.date = moment(lastReviewDate).toDate();
+                    prev.push(curr);
+                }
+
+                console.log('modifying', curr);
+                
+                return prev;
+            },[]);
+            
+            for (const rev of reducedReviws) {
+                const response = await rev.update(rev);
+                console.log('updated',response); 
             }
-
-            return prev;
-        },[]);
-
-        for (const rev of reducedReviws) {
-            const response = await rev.update(rev);
-            console.log('updated',response); 
         }
         
         await conn.close();
