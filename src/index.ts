@@ -39,7 +39,7 @@ async function init() {
             history: { 
                 $exists: true,
             },
-            $nor: [{ history: { $size: 0 } },{ history: { $size: 1 } },{ history: { $size: 1 } }],
+            $nor: [{ history: { $size: 0 } },{ history: { $size: 1 } },{ history: { $size: 2 } }],
         };
 
         const appIds = await conn.model<ReviewInterface>('Review',Review)
